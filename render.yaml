@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: bounty-server
+    runtime: java
+    buildCommand: mvn package -DskipTests -q
+    startCommand: java -Djava.security.egd=file:/dev/./urandom -jar target/bounty-server-0.0.1-SNAPSHOT.jar
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: JWT_SECRET
+        sync: false        # Set this in the Render dashboard
+      - key: DB_URL
+        sync: false        # e.g. jdbc:postgresql://<render-pg-host>:5432/bountydb
+      - key: DB_USERNAME
+        value: postgres
+      - key: DB_PASSWORD
+        sync: false
+      - key: REDIS_HOST
+        sync: false        # Set to your Redis host (see addon below)
+      - key: REDIS_PORT
+        value: "6379"
+
+databases:
+  - name: bounty-postgres
+    databaseName: bountydb
+    user: postgres
+    plan: free
+
+# Note: Render does not natively provision Redis via render.yaml.
+# Add a Redis instance manually in the Render dashboard and set REDIS_HOST.
+# Recommended: use Upstash Redis free tier (https://upstash.com) and set REDIS_HOST + REDIS_PORT.
