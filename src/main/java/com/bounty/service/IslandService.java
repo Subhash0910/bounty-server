@@ -4,6 +4,7 @@ import com.bounty.model.Island;
 import com.bounty.model.Island.IslandType;
 import com.bounty.repository.IslandRepository;
 import com.bounty.repository.PlayerRepository;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -34,6 +35,7 @@ public class IslandService {
         return islandRepository.save(island);
     }
 
+    @PostConstruct
     public void seedInitialIslands() {
         if (islandRepository.count() > 0) return;
 
@@ -43,7 +45,7 @@ public class IslandService {
             {"Ashen Cove",        IslandType.DRIFTER,  1, 120,  "A quiet bay where drifters wash ashore, forgotten by the world."},
             {"Saltwind Market",   IslandType.MERCHANT, 2, 250,  "Merchants haggle over stolen cargo under sun-bleached sails."},
             {"Iron Skull Rock",   IslandType.WARLORD,  4, 800,  "The warlord's banner flies high; challengers rarely return."},
-            {"The Void Rift",     IslandType.VOID,     5, 2000, "An island that shouldn't exist — reality frays at its edges."},
+            {"The Void Rift",     IslandType.VOID,     5, 2000, "An island that shouldn't exist \u2014 reality frays at its edges."},
             {"Copper Atoll",      IslandType.MERCHANT, 2, 300,  "Trade routes converge here; gold changes hands by moonlight."},
             {"Stormbreak Isle",   IslandType.DRIFTER,  1, 100,  "Perpetual storms keep most away, but survivors thrive."},
             {"Crimson Bastion",   IslandType.WARLORD,  3, 600,  "Walls of red stone built from the bones of defeated rivals."},
@@ -54,7 +56,7 @@ public class IslandService {
 
         for (Object[] row : seeds) {
             Island island = new Island();
-            island.setName((String)  row[0]);
+            island.setName((String) row[0]);
             island.setType((IslandType) row[1]);
             island.setDifficulty((Integer) row[2]);
             island.setBountyReward((Integer) row[3]);

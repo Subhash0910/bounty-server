@@ -29,28 +29,43 @@ public class EncounterService {
     private final EncounterRepository encounterRepository;
     private final IslandService islandService;
 
+    // ── Resolve email → Player (Option B wiring fix) ─────────────────────────
+    private Player resolvePlayer(String email) {
+        return playerRepository.findByEmail(email)
+            .orElseThrow(() -> new RuntimeException("Player not found for email: " + email));
+    }
+
     // ── Start ────────────────────────────────────────────────────────────────
 
-    public CombatState startEncounter(String playerId, String islandId) {
-        // Validate player & island exist
-        playerRepository.findById(playerId)
-            .orElseThrow(() -> new RuntimeException("Player not found"));
+    /**
+     * @param email   JWT subject (player email) passed from controller
+     * @param islandId  target island UUID
+     */
+    public CombatState startEncounter(String email, String islandId) {
+        Player player = resolvePlayer(email);
+
         islandRepository.findById(islandId)
-            .orElseThrow(() -> new RuntimeException("Island not found"));
+            .orElseThrow(() -> new RuntimeException("Island not found: " + islandId));
 
         CombatState state = new CombatState();
-        state.setPlayerId(playerId);
+        state.setPlayerId(player.getId());   // store UUID in Redis state
         state.setIslandId(islandId);
 
-        String key = COMBAT_KEY_PREFIX + playerId;
+        String key = COMBAT_KEY_PREFIX + player.getId();
         redisTemplate.opsForValue().set(key, state, COMBAT_TTL);
         return state;
     }
 
     // ── Process Turn ─────────────────────────────────────────────────────────
 
-    public CombatState processTurn(String playerId, Approach approach) {
-        String key = COMBAT_KEY_PREFIX + playerId;
+    /**
+     * @param email   JWT subject (player email) passed from controller
+     * @param approach player's chosen combat approach
+     */
+    public CombatState processTurn(String email, Approach approach) {
+        Player player = resolvePlayer(email);
+
+        String key = COMBAT_KEY_PREFIX + player.getId();
         CombatState state = (CombatState) redisTemplate.opsForValue().get(key);
 
         if (state == null)
@@ -61,7 +76,8 @@ public class EncounterService {
         state.setPlayerApproach(approach);
         Random rng = new Random();
 
-        Player player = playerRepository.findById(state.getPlayerId())
+        // Refresh player from DB to get latest bounty/islandsConquered
+        player = playerRepository.findById(state.getPlayerId())
             .orElseThrow(() -> new RuntimeException("Player not found"));
 
         // ── Damage Calculation ────────────────────────────────────────────────
@@ -78,7 +94,6 @@ public class EncounterService {
             }
             case NEGOTIATE -> {
                 if (rng.nextDouble() < 0.40) {
-                    // Instant WIN with half bounty reward
                     state.setStatus(Status.PLAYER_WON);
                     Island island = islandRepository.findById(state.getIslandId()).orElseThrow();
                     int halfReward = island.getBountyReward() / 2;
@@ -86,7 +101,6 @@ public class EncounterService {
                     redisTemplate.delete(key);
                     return state;
                 } else {
-                    // Enemy attacks hard on failed negotiation
                     state.setPlayerHealth(Math.max(0, state.getPlayerHealth() - 25));
                 }
             }
@@ -106,7 +120,6 @@ public class EncounterService {
             finaliseLoss(player, state);
             redisTemplate.delete(key);
         } else {
-            // Still ongoing — refresh TTL
             redisTemplate.opsForValue().set(key, state, COMBAT_TTL);
         }
 
@@ -115,9 +128,10 @@ public class EncounterService {
 
     // ── History ──────────────────────────────────────────────────────────────
 
-    public List<Encounter> getEncounterHistory(String playerId) {
+    public List<Encounter> getEncounterHistory(String email) {
+        Player player = resolvePlayer(email);
         return encounterRepository.findByPlayerIdOrderByPlayedAtDesc(
-            playerId, PageRequest.of(0, 10));
+            player.getId(), PageRequest.of(0, 10));
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
