@@ -21,7 +21,7 @@ public class LeaderboardController {
     /**
      * GET /api/leaderboard
      * Returns top 10 players sorted by bounty descending.
-     * Used by WorldMapScene to render the captain leaderboard sidebar.
+     * Used by WorldMapScene leaderboard sidebar.
      */
     @GetMapping("/api/leaderboard")
     public ResponseEntity<List<Map<String, Object>>> getLeaderboard() {
