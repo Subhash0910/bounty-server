@@ -11,7 +11,9 @@ import java.util.Optional;
 public interface PlayerRepository extends JpaRepository<Player, String> {
     Optional<Player> findByEmail(String email);
     Optional<Player> findByHandle(String handle);
+    boolean existsByEmail(String email);
+    boolean existsByHandle(String handle);
 
-    // Top 10 players by bounty descending — used by /api/leaderboard
+    // Top 10 by bounty — leaderboard
     List<Player> findTop10ByOrderByBountyDesc();
 }
