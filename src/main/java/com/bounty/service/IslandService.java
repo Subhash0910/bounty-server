@@ -38,14 +38,12 @@ public class IslandService {
 
     /**
      * Seeds 12 islands with DETERMINISTIC UUIDs derived from island name.
-     * This means island IDs are STABLE across restarts and re-seeds —
+     * Double-guarded: skips if stableId already exists OR if name already exists.
+     * This means island IDs are STABLE across restarts, re-seeds, and volume wipes.
      * URLs like /combat/{id} will never break after a Docker restart.
-     *
-     * To force a re-seed: DELETE FROM islands; then restart.
      */
     @PostConstruct
     public void seedInitialIslands() {
-        // { name, type, difficulty, bountyReward, lore, posX, posY }
         Object[][] seeds = {
             {"Ashen Cove",        IslandType.DRIFTER,  1, 120,  "A quiet bay where drifters wash ashore, forgotten by the world.",                     80f,  90f},
             {"Saltwind Market",   IslandType.MERCHANT, 2, 250,  "Merchants haggle over stolen cargo under sun-bleached sails.",                       280f, 160f},
@@ -63,12 +61,14 @@ public class IslandService {
 
         for (Object[] row : seeds) {
             String name = (String) row[0];
-            // Deterministic UUID: same name always → same UUID
+            // Deterministic UUID: same name always → same UUID, forever
             String stableId = UUID.nameUUIDFromBytes(
                 ("bounty-island:" + name).getBytes(StandardCharsets.UTF_8)
             ).toString();
 
-            if (islandRepository.existsById(stableId)) continue; // already seeded
+            // Double guard: skip if ID exists OR name exists (handles edge cases)
+            if (islandRepository.existsById(stableId)) continue;
+            if (islandRepository.existsByName(name)) continue;
 
             Island island = new Island();
             island.setId(stableId);
