@@ -9,40 +9,40 @@ import java.time.LocalDateTime;
 @Table(name = "islands")
 public class Island {
 
-    public enum IslandType {
-        DRIFTER, MERCHANT, WARLORD, VOID
-    }
+    public enum IslandType { DRIFTER, MERCHANT, WARLORD, VOID }
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
 
     @Column(nullable = false, length = 60)
     private String name;
 
-    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
+    @Enumerated(EnumType.STRING)
     private IslandType type;
 
     @Column(nullable = false)
-    private Integer difficulty; // 1-5
+    private int difficulty;
 
     @Column(nullable = false)
-    private Integer bountyReward;
+    private int bountyReward;
 
-    @Column
-    private String ownerId; // nullable — no owner if unclaimed
-
-    @Column
-    private LocalDateTime flagPlantedAt;
-
-    @Lob
     @Column(columnDefinition = "TEXT")
     private String lore;
 
     @Column(nullable = false)
-    private Float positionX;
+    private float positionX;
 
     @Column(nullable = false)
-    private Float positionY;
+    private float positionY;
+
+    private String        ownerId;
+    private LocalDateTime flagPlantedAt;
+
+    @PrePersist
+    public void prePersist() {
+        if (id == null || id.isBlank()) {
+            id = java.util.UUID.randomUUID().toString();
+        }
+    }
 }
