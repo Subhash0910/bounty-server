@@ -10,7 +10,9 @@ import com.bounty.repository.PlayerRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Duration;
 import java.util.List;
@@ -32,7 +34,10 @@ public class EncounterService {
     // ── Resolve email → Player ────────────────────────────────────────────────
     private Player resolvePlayer(String email) {
         return playerRepository.findByEmail(email)
-            .orElseThrow(() -> new RuntimeException("Player not found for email: " + email));
+            .orElseThrow(() -> new ResponseStatusException(
+                HttpStatus.NOT_FOUND,
+                "Player not found for email: " + email + ". Please re-register or log in again."
+            ));
     }
 
     // ── Start ────────────────────────────────────────────────────────────────
@@ -40,7 +45,9 @@ public class EncounterService {
         Player player = resolvePlayer(email);
 
         islandRepository.findById(islandId)
-            .orElseThrow(() -> new RuntimeException("Island not found: " + islandId));
+            .orElseThrow(() -> new ResponseStatusException(
+                HttpStatus.NOT_FOUND, "Island not found: " + islandId
+            ));
 
         CombatState state = new CombatState();
         state.setPlayerId(player.getId());
@@ -59,16 +66,16 @@ public class EncounterService {
         CombatState state = (CombatState) redisTemplate.opsForValue().get(key);
 
         if (state == null)
-            throw new RuntimeException("No active combat session. Start an encounter first.");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "No active combat session. Start an encounter first.");
         if (state.getStatus() != Status.ONGOING)
-            throw new RuntimeException("Combat already finished.");
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Combat already finished.");
 
         state.setPlayerApproach(approach);
         Random rng = new Random();
 
         // Refresh player to get latest bounty / islandsConquered
         player = playerRepository.findById(state.getPlayerId())
-            .orElseThrow(() -> new RuntimeException("Player not found"));
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Player not found"));
 
         // ── Damage Calculation ────────────────────────────────────────────────
         switch (approach) {
