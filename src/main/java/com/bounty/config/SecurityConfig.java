@@ -27,7 +27,12 @@ public class SecurityConfig {
             .sessionManagement(session -> session
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
+                // Auth endpoints — no token needed
                 .requestMatchers("/api/auth/**").permitAll()
+                // WebSocket SockJS handshake endpoints — must be public
+                .requestMatchers("/ws/**").permitAll()
+                // Actuator health check — used by Render
+                .requestMatchers("/actuator/health").permitAll()
                 .anyRequest().authenticated())
             .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
 
