@@ -24,12 +24,15 @@ public class IslandController {
 
     /**
      * GET /api/world/map
-     * Returns all islands enriched with owner handle (if owned).
+     * Returns all islands enriched with owner handle.
+     * Uses LinkedHashMap (not Map.of) so null values for ownerId/ownerHandle are safe.
      */
     @GetMapping("/api/world/map")
     public ResponseEntity<List<Map<String, Object>>> getWorldMap() {
         List<Island> islands = islandService.getAllIslands();
-        List<Map<String, Object>> result = islands.stream().map(this::toMapSummary).collect(Collectors.toList());
+        List<Map<String, Object>> result = islands.stream()
+            .map(this::toMapSummary)
+            .collect(Collectors.toList());
         return ResponseEntity.ok(result);
     }
 
@@ -45,39 +48,44 @@ public class IslandController {
 
     /**
      * POST /api/islands/{id}/claim
-     * Directly claims an island for the authenticated player (no combat).
-     * Useful for admin/testing; combat-based claiming goes through EncounterService.
+     * Directly claims an island for the authenticated player (admin/testing use).
      */
     @PostMapping("/api/islands/{id}/claim")
     public ResponseEntity<Map<String, Object>> claimIsland(@PathVariable String id,
                                                            Authentication auth) {
-        String email = auth.getName(); // JWT subject = email
+        String email = auth.getName();
         Player player = playerRepository.findByEmail(email)
             .orElseThrow(() -> new RuntimeException("Player not found"));
-
         Island updated = islandService.updateOwner(id, player.getId());
         return ResponseEntity.ok(toMapFull(updated));
     }
 
-    // ── Private helpers ───────────────────────────────────────────────────────
+    // ── Private helpers ────────────────────────────────────────────────
 
     private String resolveOwnerHandle(String ownerId) {
-        if (ownerId == null) return "";
-        return playerRepository.findById(ownerId).map(Player::getHandle).orElse("");
+        if (ownerId == null || ownerId.isBlank()) return null;
+        return playerRepository.findById(ownerId)
+            .map(Player::getHandle)
+            .orElse(null);
     }
 
+    /**
+     * Summary used by /api/world/map — includes lore for tooltip display.
+     * Intentionally uses LinkedHashMap so null values (ownerId, ownerHandle) are allowed.
+     */
     private Map<String, Object> toMapSummary(Island island) {
-        return Map.of(
-            "id",           island.getId(),
-            "name",         island.getName(),
-            "type",         island.getType().name(),
-            "difficulty",   island.getDifficulty(),
-            "bountyReward", island.getBountyReward(),
-            "ownerId",      island.getOwnerId()    != null ? island.getOwnerId() : "",
-            "ownerHandle",  resolveOwnerHandle(island.getOwnerId()),
-            "positionX",    island.getPositionX(),
-            "positionY",    island.getPositionY()
-        );
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id",           island.getId());
+        m.put("name",         island.getName());
+        m.put("type",         island.getType().name());
+        m.put("difficulty",   island.getDifficulty());
+        m.put("bountyReward", island.getBountyReward());
+        m.put("ownerId",      island.getOwnerId());            // may be null — safe with LinkedHashMap
+        m.put("ownerHandle",  resolveOwnerHandle(island.getOwnerId())); // may be null
+        m.put("lore",         island.getLore());               // needed by WorldMapScene tooltip
+        m.put("positionX",    island.getPositionX());
+        m.put("positionY",    island.getPositionY());
+        return m;
     }
 
     private Map<String, Object> toMapFull(Island island) {
