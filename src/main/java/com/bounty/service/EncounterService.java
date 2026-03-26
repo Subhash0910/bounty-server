@@ -29,18 +29,13 @@ public class EncounterService {
     private final EncounterRepository encounterRepository;
     private final IslandService islandService;
 
-    // ── Resolve email → Player (Option B wiring fix) ─────────────────────────
+    // ── Resolve email → Player ────────────────────────────────────────────────
     private Player resolvePlayer(String email) {
         return playerRepository.findByEmail(email)
             .orElseThrow(() -> new RuntimeException("Player not found for email: " + email));
     }
 
     // ── Start ────────────────────────────────────────────────────────────────
-
-    /**
-     * @param email   JWT subject (player email) passed from controller
-     * @param islandId  target island UUID
-     */
     public CombatState startEncounter(String email, String islandId) {
         Player player = resolvePlayer(email);
 
@@ -48,7 +43,7 @@ public class EncounterService {
             .orElseThrow(() -> new RuntimeException("Island not found: " + islandId));
 
         CombatState state = new CombatState();
-        state.setPlayerId(player.getId());   // store UUID in Redis state
+        state.setPlayerId(player.getId());
         state.setIslandId(islandId);
 
         String key = COMBAT_KEY_PREFIX + player.getId();
@@ -57,11 +52,6 @@ public class EncounterService {
     }
 
     // ── Process Turn ─────────────────────────────────────────────────────────
-
-    /**
-     * @param email   JWT subject (player email) passed from controller
-     * @param approach player's chosen combat approach
-     */
     public CombatState processTurn(String email, Approach approach) {
         Player player = resolvePlayer(email);
 
@@ -76,7 +66,7 @@ public class EncounterService {
         state.setPlayerApproach(approach);
         Random rng = new Random();
 
-        // Refresh player from DB to get latest bounty/islandsConquered
+        // Refresh player to get latest bounty / islandsConquered
         player = playerRepository.findById(state.getPlayerId())
             .orElseThrow(() -> new RuntimeException("Player not found"));
 
@@ -89,14 +79,17 @@ public class EncounterService {
                 state.setPlayerHealth(Math.max(0, state.getPlayerHealth() - dmgToPlayer));
             }
             case INTIMIDATE -> {
+                // Requires 1000+ bounty; higher bounty = 30 morale damage, otherwise 10
                 int moraleHit = (player.getBounty() > 10_000) ? 30 : 10;
                 state.setEnemyHealth(Math.max(0, state.getEnemyHealth() - moraleHit));
             }
             case NEGOTIATE -> {
                 if (rng.nextDouble() < 0.40) {
-                    state.setStatus(Status.PLAYER_WON);
+                    // Early win at half reward
                     Island island = islandRepository.findById(state.getIslandId()).orElseThrow();
                     int halfReward = island.getBountyReward() / 2;
+                    state.setStatus(Status.PLAYER_WON);
+                    state.setBountyChange(halfReward);  // ← set for client overlay
                     finaliseWin(player, island, halfReward, state);
                     redisTemplate.delete(key);
                     return state;
@@ -110,13 +103,17 @@ public class EncounterService {
 
         // ── Win / Lose Check ─────────────────────────────────────────────────
         if (state.getEnemyHealth() <= 0) {
-            state.setStatus(Status.PLAYER_WON);
             Island island = islandRepository.findById(state.getIslandId()).orElseThrow();
             int fullReward = (int)(island.getBountyReward() * (1.0 + player.getIslandsConquered() * 0.1));
+            state.setStatus(Status.PLAYER_WON);
+            state.setBountyChange(fullReward);  // ← set for client overlay
             finaliseWin(player, island, fullReward, state);
             redisTemplate.delete(key);
         } else if (state.getPlayerHealth() <= 0) {
             state.setStatus(Status.PLAYER_LOST);
+            // Compute penalty before calling finaliseLoss so we can set it on state
+            long penalty = (long)(player.getBounty() * 0.10);
+            state.setBountyChange(-(int) penalty);  // ← set for client overlay (negative)
             finaliseLoss(player, state);
             redisTemplate.delete(key);
         } else {
@@ -127,7 +124,6 @@ public class EncounterService {
     }
 
     // ── History ──────────────────────────────────────────────────────────────
-
     public List<Encounter> getEncounterHistory(String email) {
         Player player = resolvePlayer(email);
         return encounterRepository.findByPlayerIdOrderByPlayedAtDesc(
@@ -135,7 +131,6 @@ public class EncounterService {
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
-
     private void finaliseWin(Player player, Island island, int reward, CombatState state) {
         player.setBounty(player.getBounty() + reward);
         player.setIslandsConquered(player.getIslandsConquered() + 1);
