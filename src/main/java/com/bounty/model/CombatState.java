@@ -19,9 +19,10 @@ public class CombatState implements Serializable {
 
     private String playerId;
     private String islandId;
-    private int playerHealth = 100;
-    private int enemyHealth  = 100;
-    private int round        = 1;
+    private int playerHealth  = 100;
+    private int enemyHealth   = 100;
+    private int round         = 1;
+    private int bountyChange  = 0;   // set by EncounterService on win/loss; read by client overlay
     private Approach playerApproach;
-    private Status status    = Status.ONGOING;
+    private Status status     = Status.ONGOING;
 }
